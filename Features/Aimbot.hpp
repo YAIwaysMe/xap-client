@@ -34,6 +34,7 @@ struct Aimbot {
 
     float Speed = 40;
     float Smooth = 10;
+    float ExtraSmooth = 250;
     float FOV = 10;
     float ZoomScale = 1.2;
     float MinDistance = 1;
@@ -43,6 +44,7 @@ struct Aimbot {
     bool RecoilEnabled = true;
     float PitchPower = 3;
     float YawPower = 3;
+    bool WinScope = true;
 
     XDisplay* X11Display;
     LocalPlayer* Myself;
@@ -51,7 +53,6 @@ struct Aimbot {
     Player* CurrentTarget = nullptr;
     bool TargetSelected = true;
     QAngle RCSLastPunch;
-    std::chrono::milliseconds LastAimTime;
 
     Aimbot(XDisplay* X11Display, LocalPlayer* Myself, std::vector<Player*>* GamePlayers) {
         this->X11Display = X11Display;
@@ -60,62 +61,66 @@ struct Aimbot {
     }
 
     void RenderUI() {
-        if (ImGui::BeginTabItem("Aim", nullptr, ImGuiTabItemFlags_NoCloseWithMiddleMouseButton | ImGuiTabItemFlags_NoReorder)) {
-            ImGui::Checkbox("Aim - Assist", &AimbotEnabled);
+        if (ImGui::BeginTabItem("自瞄", nullptr, ImGuiTabItemFlags_NoCloseWithMiddleMouseButton | ImGuiTabItemFlags_NoReorder)) {
+            ImGui::Checkbox("启用智慧核心", &AimbotEnabled);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Toggle the Aim-Assist");
+                ImGui::SetTooltip("勾选以开启Alt和左键自瞄");
+            ImGui::Separator();
+
+            ImGui::Checkbox("右键瞄准", &WinScope);
 
             ImGui::Separator();
 
-            if (ImGui::CollapsingHeader("Recoil Control", nullptr)) {
-                ImGui::Checkbox("Recoil Control", &RecoilEnabled);
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip("Reduce the intensity of weapon's recoil.");
-                ImGui::SliderFloat("Pitch", &PitchPower, 1, 10, "%.1f");
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip("Pitch Power");
-                ImGui::SliderFloat("Yaw", &YawPower, 1, 10, "%.1f");
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip("Yaw Power");
-            }
+            ImGui::Checkbox("后坐力控制", &RecoilEnabled);
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("自瞄选中后启用后坐力控制");
+            ImGui::SliderFloat("水平后坐", &PitchPower, 1, 10, "%.1f");
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("水平方向后坐控制");
+            ImGui::SliderFloat("竖直后坐", &YawPower, 1, 10, "%.1f");
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("竖直方向后坐控制");
 
             ImGui::Separator();
 
-            ImGui::Checkbox("Predict Movement", &PredictMovement);
+            ImGui::Checkbox("预测跟枪", &PredictMovement);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Predict target's movement");
+                ImGui::SetTooltip("启用后会预测敌人移动");
             ImGui::SameLine();
-            ImGui::Checkbox("Predict Bullet Drop", &PredictBulletDrop);
+            ImGui::Checkbox("预测下落", &PredictBulletDrop);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Predict weapon's bullet drop");
+                ImGui::SetTooltip("启用后自动计算下坠距离");
 
             ImGui::Separator();
 
-            ImGui::SliderFloat("Speed", &Speed, 1, 100, "%.0f");
+            ImGui::SliderFloat("鼠标移速", &Speed, 1, 100, "%.0f");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Speed of the Aim-Assist\nHigher = Faster");
+                ImGui::SetTooltip("越大移动速度越快");
 
             ImGui::Separator();
 
-            ImGui::SliderFloat("Smooth", &Smooth, 0, 0.99, "%.3f");
+            ImGui::SliderFloat("平滑", &Smooth, 1, 60, "%.0f");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Smoothness for the Aim-Assist\nHigher = Smoother");
+                ImGui::SetTooltip("越小吸附越强");
+            ImGui::SliderFloat("额外平滑", &ExtraSmooth, 100, 5000, "%.0f");
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("准星靠近敌人时移动更平滑");
 
             ImGui::Separator();
 
-            ImGui::SliderFloat("FOV", &FOV, 1, 90, "%.0f");
+            ImGui::SliderFloat("自瞄范围", &FOV, 1, 90, "%.0f");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Field of View");
-            ImGui::SliderFloat("Zoom Scale", &ZoomScale, 0, 5, "%.1f");
+                ImGui::SetTooltip("具体范围看透视绘制的圈");
+            ImGui::SliderFloat("开镜范围", &ZoomScale, 0, 5, "%.1f");
 
             ImGui::Separator();
 
-            ImGui::SliderFloat("Hip-fire Distance", &HipfireDistance, 1, 500, "%.0f");
+            ImGui::SliderFloat("最小自瞄距离", &HipfireDistance, 1, 500, "%.0f");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Minimum distance for Aim-Assist to work");
-            ImGui::SliderFloat("Zoom Distance", &ZoomDistance, 1, 500, "%.0f");
+                ImGui::SetTooltip("自瞄的最小工作距离 。不建议调整");
+            ImGui::SliderFloat("最大距离", &ZoomDistance, 1, 500, "%.0f");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Maximum distance for Aim-Assist to work");
+                ImGui::SetTooltip("自瞄的最大工作距离");
 
             ImGui::EndTabItem();
         }
@@ -128,6 +133,7 @@ struct Aimbot {
             Config::Aimbot::PredictBulletDrop = PredictBulletDrop;
             Config::Aimbot::Speed = Speed;
             Config::Aimbot::Smooth = Smooth;
+            Config::Aimbot::ExtraSmooth = ExtraSmooth;
             Config::Aimbot::FOV = FOV;
             Config::Aimbot::ZoomScale = ZoomScale;
             Config::Aimbot::MinDistance = MinDistance;
@@ -136,6 +142,7 @@ struct Aimbot {
             Config::Aimbot::RecoilControl = RecoilEnabled;
             Config::Aimbot::PitchPower = PitchPower;
             Config::Aimbot::YawPower = YawPower;
+            Config::Aimbot::WinScope = WinScope;
             return true;
         } catch (...) {
             return false;
@@ -149,15 +156,14 @@ struct Aimbot {
             FinalDistance = ZoomDistance;
         else FinalDistance = HipfireDistance;
 
-        if (!Myself->IsCombatReady()) { CurrentTarget = nullptr; return; }
-        if (!X11Display->KeyDown(XK_Shift_L) && !Myself->IsInAttack) { ReleaseTarget(); return; }
+        if (!Myself->IsCombatReady()) { ReleaseTarget(); return; }
+
+        if (!X11Display->KeyDown(XK_Alt_L) && (!Myself->IsInAttack) && (!Myself->IsZooming && WinScope)) { ReleaseTarget(); return; }
+
         if (Myself->IsHoldingGrenade) { ReleaseTarget(); return; }
 
         Player* Target = CurrentTarget;
         if (!IsValidTarget(Target)) {
-            if (TargetSelected)
-                return;
-
             Target = FindBestTarget();
             if (!IsValidTarget(Target)) {
                 ReleaseTarget();
@@ -167,16 +173,9 @@ struct Aimbot {
             CurrentTarget = Target;
             CurrentTarget->IsLockedOn = true;
             TargetSelected = true;
-        } 
-        
-        if (TargetSelected && CurrentTarget) {
-            std::chrono::milliseconds Now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-            if (Now >= LastAimTime + std::chrono::milliseconds(10)) {
-                StartAiming();
-                LastAimTime = Now + std::chrono::milliseconds((int)Utils::RandomRange(1, 10));
-            }
-            return;
         }
+        
+        StartAiming();
     }
 
     void StartAiming() {
@@ -188,35 +187,29 @@ struct Aimbot {
         // Recoil Control
         RecoilControl(DesiredAngles);
 
-        // Smoothing
-        SmoothAngle(DesiredAngles);
+        // Calculate Increment
+        Vector2D DesiredAnglesIncrement = Vector2D(CalculatePitchIncrement(DesiredAngles), CalculateYawIncrement(DesiredAngles));
 
-        // Aim angles
-        Vector2D aimbotDelta = Vector2D(CalculatePitchIncrement(DesiredAngles), CalculateYawIncrement(DesiredAngles)).Multiply(Speed);
-        int totalYawIncrementInt = RoundHalfEven(AL1AF0(aimbotDelta.x));
-        int totalPitchIncrementInt = RoundHalfEven(AL1AF0(aimbotDelta.y * -1));
+        // Calculate Smooth
+        float Extra = ExtraSmooth / CurrentTarget->DistanceToLocalPlayer;
+        float TotalSmooth = Smooth + Extra;
+
+        // Aimbot calcs
+        Vector2D aimbotDelta = DesiredAnglesIncrement.Divide(TotalSmooth).Multiply(Speed);
+        double aimYawIncrement = aimbotDelta.y * -1;
+        double aimPitchIncrement = aimbotDelta.x;
+
+        // Turn into integers
+        int totalPitchIncrementInt = RoundHalfEven(AL1AF0(aimPitchIncrement));
+        int totalYawIncrementInt = RoundHalfEven(AL1AF0(aimYawIncrement));
 
         // Move Mouse
         if (totalPitchIncrementInt == 0 && totalYawIncrementInt == 0) return;
-        X11Display->MoveMouse(totalYawIncrementInt, totalPitchIncrementInt);
-    }
-
-    void SmoothAngle(QAngle& Angle) {
-        QAngle ViewAngles = QAngle(Myself->ViewAngles.x, Myself->ViewAngles.y).NormalizeAngles();
-        QAngle Delta = Angle - ViewAngles;
-        Delta.NormalizeAngles();
-
-        float SmoothValue = powf(this->Smooth, 0.4f);
-        SmoothValue = std::min(0.99f, SmoothValue);
-
-        QAngle ToChange = QAngle();
-	    ToChange = Delta - Delta * Smooth;
-
-        Angle = ViewAngles + ToChange;
+        X11Display->MoveMouse(totalPitchIncrementInt, totalYawIncrementInt);
     }
 
     bool GetAngle(Player* Target, QAngle& Angle) {
-        const QAngle CurrentAngle = QAngle(Myself->ViewAngles.x, Myself->ViewAngles.y).NormalizeAngles();
+        const QAngle CurrentAngle = QAngle(Myself->ViewAngles.x, Myself->ViewAngles.y).fixAngle();
         if (!CurrentAngle.isValid())
             return false;
 
@@ -230,7 +223,7 @@ struct Aimbot {
         Vector3D TargetPosition = Target->GetBonePosition(static_cast<HitboxType>(GetBestBone(Target)));
         Vector3D TargetVelocity = Target->AbsoluteVelocity;
         Vector3D CameraPosition = Myself->CameraPosition;
-        QAngle CurrentAngle = QAngle(Myself->ViewAngles.x, Myself->ViewAngles.y).NormalizeAngles();
+        QAngle CurrentAngle = QAngle(Myself->ViewAngles.x, Myself->ViewAngles.y).fixAngle();
         
         if (Myself->WeaponProjectileSpeed > 1.0f) {
             if (PredictBulletDrop && PredictMovement) {
@@ -282,7 +275,7 @@ struct Aimbot {
 
     double CalculateDistanceFromCrosshair(Vector3D TargetPosition) {
         Vector3D CameraPosition = Myself->CameraPosition;
-        QAngle CurrentAngle = QAngle(Myself->ViewAngles.x, Myself->ViewAngles.y).NormalizeAngles();
+        QAngle CurrentAngle = QAngle(Myself->ViewAngles.x, Myself->ViewAngles.y).fixAngle();
 
         if (CameraPosition.Distance(TargetPosition) <= 0.0001f)
             return -1;
@@ -325,7 +318,7 @@ struct Aimbot {
     }
 
     void RecoilControl(QAngle& Angle) {
-        QAngle CurrentPunch = QAngle(Myself->PunchAngles.x, Myself->PunchAngles.y).NormalizeAngles();
+        QAngle CurrentPunch = QAngle(Myself->PunchAngles.x, Myself->PunchAngles.y).fixAngle();
         QAngle NewPunch = { CurrentPunch.x - RCSLastPunch.x, CurrentPunch.y - RCSLastPunch.y };
 
 		Angle.x -= NewPunch.x * YawPower;
@@ -350,24 +343,35 @@ struct Aimbot {
 
     Player* FindBestTarget() {
         Player* NearestTarget = nullptr;
+
         float BestDistance = 9999;
+        int BestHP = 100;
+        int BestArmor = 125;
         float BestFOV = std::min(FOV, FOV * (GetFOVScale() * ZoomScale));
+
         Vector3D CameraPosition = Myself->CameraPosition;
         for (int i = 0; i < Players->size(); i++) {
             Player* p = Players->at(i);
             if (!IsValidTarget(p)) continue;
+            
             if (p->DistanceToLocalPlayer < Conversion::ToGameUnits(ZoomDistance)) {
                 HitboxType BestBone = static_cast<HitboxType>(GetBestBone(p));
                 Vector3D TargetPosition = p->GetBonePosition(BestBone);
 
                 float Distance = CameraPosition.Distance(TargetPosition);
                 float FOV = CalculateDistanceFromCrosshair(TargetPosition);
-
-                if (FOV > BestFOV) continue;
+                float HP = p->Health;
+                float Armor = p->Shield;
+                
                 if (Distance > BestDistance) continue;
+                if (FOV > BestFOV) continue;
+                if (HP > BestHP) continue;
+                if (Armor > BestArmor) continue;
 
                 NearestTarget = p;
                 BestDistance = Distance;
+                BestHP = HP;
+                BestArmor = Armor;
             }
         }
         return NearestTarget;
