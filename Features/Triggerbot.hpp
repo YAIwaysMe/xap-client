@@ -27,28 +27,33 @@ struct Triggerbot {
     LocalPlayer* Myself;
     std::vector<Player*>* Players;
 
-    Triggerbot(XDisplay* X11Display, LocalPlayer* Myself, std::vector<Player*>* GamePlayers) {
+    Triggerbot(XDisplay* X11Display, LocalPlayer* Myself, std::vector<Player*>* GamePlayers)
+     {
         this->X11Display = X11Display;
         this->Myself = Myself;
         this->Players = GamePlayers;
     }
 
     void RenderUI() {
-        if (ImGui::BeginTabItem("Triggerbot", nullptr, ImGuiTabItemFlags_NoCloseWithMiddleMouseButton | ImGuiTabItemFlags_NoReorder)) {
-            ImGui::Checkbox("Triggerbot", &TriggerbotEnabled);
+        if (ImGui::BeginTabItem("扳机", nullptr, ImGuiTabItemFlags_NoCloseWithMiddleMouseButton | ImGuiTabItemFlags_NoReorder)) {
+            ImGui::Checkbox("启用扳机", &TriggerbotEnabled);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Will automatically shoot the target\nWill only activate when your crosshair is at target whilst holding down Triggerbot key");
-            ImGui::SliderFloat("Triggerbot Range", &TriggerbotRange, 0, 1000, "%.0f");
+                ImGui::SetTooltip("按住Shift启动扳机");
+            ImGui::SliderFloat("扳机生效距离", &TriggerbotRange, 0, 1000, "%.0f");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Triggerbot's activation range.");
+                ImGui::SetTooltip("字面意思");
+                
             ImGui::EndTabItem();
         }
     }
+    
+       
 
     bool Save() {
         try {
             Config::Triggerbot::Enabled = TriggerbotEnabled;
             Config::Triggerbot::Range = TriggerbotRange;
+
             return true;
         } catch (...) {
             return false;
