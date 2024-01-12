@@ -6,6 +6,7 @@
 #include "../Core/Offsets.hpp"
 #include "../Core/GlowMode.hpp"
 #include "../Core/Camera.hpp"
+#include "../Core/Level.hpp"
 
 #include "../Features/Aimbot.hpp"
 
@@ -17,6 +18,7 @@
 #include "../Utils/Conversion.hpp"
 #include "../Utils/Config.hpp"
 #include "../Utils/HitboxType.hpp"
+
 
 // UI //
 #include "../imgui/imgui.h"
@@ -46,11 +48,14 @@ struct Sense {
     float SeerMaxDistance = 200;
     float GameFOV = 120;
 
-    bool ShowSpectators = true;
-    
+    bool ShowSpectators = false;
+   
     // Variables
     Camera* GameCamera;
     LocalPlayer* Myself;
+    Player* player;
+    Level* level;
+
     std::vector<Player*>* Players;
     std::chrono::milliseconds LastUpdateTime;
     int TotalSpectators = 0;
@@ -62,57 +67,60 @@ struct Sense {
         this->Myself = Myself;
     }
 
+    
     void RenderUI() {
-        if (ImGui::BeginTabItem("Sense", nullptr, ImGuiTabItemFlags_NoCloseWithMiddleMouseButton | ImGuiTabItemFlags_NoReorder)) {
+        if (ImGui::BeginTabItem("透视", nullptr, ImGuiTabItemFlags_NoCloseWithMiddleMouseButton | ImGuiTabItemFlags_NoReorder)) {
             // Glow //
-            ImGui::Checkbox("Glow##ESP", &GlowEnabled);
+            ImGui::Checkbox("人物透视##ESP", &GlowEnabled);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Toggle Glowing");
+                ImGui::SetTooltip("透视开关");
             ImGui::SameLine();
-            ImGui::Checkbox("Item Glow", &ItemGlow);
+            ImGui::Checkbox("物品透视", &ItemGlow);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("You will have Loba's ability to see rare items");
-            ImGui::SliderFloat("Max Distance", &GlowMaxDistance, 0, 1000, "%.0f");
+                ImGui::SetTooltip("暂时无法透视枪械，子弹");
+            ImGui::SliderFloat("透视距离", &GlowMaxDistance, 0, 1000, "%.0f");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Only those in range will glow");
+                ImGui::SetTooltip("单位米");
 
             ImGui::Separator();
 
             // Drawings
-            ImGui::Checkbox("Draw Tracer##ESP", &DrawTracers);
+            ImGui::Checkbox("绘制线条##ESP", &DrawTracers);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Draw lines to enemies");
+                ImGui::SetTooltip("画一条没什么用还掉帧的线");
             ImGui::SameLine();
-            ImGui::Checkbox("Draw Distance##ESP", &DrawDistance);
+            ImGui::Checkbox("绘制距离##ESP", &DrawDistance);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Show how far the enemy is");
+                ImGui::SetTooltip("人下面加一个看不见的距离数字");
             ImGui::Separator();
-            ImGui::Checkbox("Draw Health and Armor##ESP", &DrawSeer);
+            ImGui::Checkbox("希尔血条##ESP", &DrawSeer);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Draw Health Bar and Armor");
-            ImGui::Checkbox("Aimed At Only##ESP", &AimedAtOnly);
+                ImGui::SetTooltip("最喜欢的一级");
+            ImGui::Checkbox("锁定时启用希尔血条##ESP", &AimedAtOnly);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Only draw those who are locked on by Aim-Assist");
-            ImGui::SliderFloat("Draw Distance", &SeerMaxDistance, 0, 1000, "%.0f");
+                ImGui::SetTooltip("锁到谁就测谁全甲");
+            ImGui::SliderFloat("绘制距离", &SeerMaxDistance, 0, 1000, "%.0f");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Only draw those in range.");
-
-            ImGui::Separator();
-
-            ImGui::Checkbox("Draw FOV Circle", &DrawFOVCircle);
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Draw FOV Circle");
-            ImGui::SliderFloat("Game's FOV", &GameFOV, 70, 120, "%.0f");
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Your current FOV in Settings");
+                ImGui::SetTooltip("希尔血条的生效距离");
 
             ImGui::Separator();
 
-            ImGui::Checkbox("Show Spectators", &ShowSpectators);
+            ImGui::Checkbox("绘制一个FOV圈", &DrawFOVCircle);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Show spectators");
+                ImGui::SetTooltip("大小在自瞄设置里面");
+            ImGui::SliderFloat("游戏FOV", &GameFOV, 70, 120, "%.0f");
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("你的游戏FOV，设置错误会影响自瞄效果");
+
+            ImGui::Separator();
+
+            ImGui::Checkbox("观战显示", &ShowSpectators);
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("全体目光向我看齐！");
 
             ImGui::EndTabItem();
+
+
         }
     }
     
@@ -127,6 +135,8 @@ struct Sense {
             Config::Sense::ShowSpectators = ShowSpectators;
             Config::Sense::DrawFOVCircle = DrawFOVCircle;
             Config::Sense::GameFOV = GameFOV;
+            Config::Sense::DrawDistance = DrawDistance;
+            Config::Sense::DrawTracers = DrawTracers;
             return true;
         } catch (...) {
             return false;
@@ -195,6 +205,7 @@ struct Sense {
             }
             ImGui::End();
         }
+    
 
         // Draw FOV Circle
         if (DrawFOVCircle && Myself->IsCombatReady()) {
@@ -237,6 +248,7 @@ struct Sense {
             }
         }
 
+ 
         // Draw Seer on locked target
         if (AimAssistState->TargetSelected && AimAssistState->CurrentTarget) {
             Vector2D headScreenPosition;
@@ -249,16 +261,19 @@ struct Sense {
         }
     }
 
+
+
+
     void SetGlowState(long HighlightSettingsPointer, long HighlightSize, int HighlightID, GlowMode NewGlowMode) {
-        const GlowMode oldGlowMode = Memory::Read<GlowMode>(HighlightSettingsPointer + (HighlightSize * HighlightID) + 4);
+        const GlowMode oldGlowMode = Memory::Read<GlowMode>(HighlightSettingsPointer + (HighlightSize * HighlightID) + 0x0);
         if (NewGlowMode != oldGlowMode)
-            Memory::Write<GlowMode>(HighlightSettingsPointer + (HighlightSize * HighlightID) + 4, NewGlowMode);
+            Memory::Write<GlowMode>(HighlightSettingsPointer + (HighlightSize * HighlightID) + 0x0, NewGlowMode);
     }
 
     void SetColorState(long HighlightSettingsPointer, long HighlightSize, int HighlightID, Color NewColor) {
-        const Color oldColor = Memory::Read<Color>(HighlightSettingsPointer + (HighlightSize * HighlightID) + 8);
+        const Color oldColor = Memory::Read<Color>(HighlightSettingsPointer + (HighlightSize * HighlightID) + 0x4);
         if (oldColor != NewColor)
-            Memory::Write<Color>(HighlightSettingsPointer + (HighlightSize * HighlightID) + 8, NewColor);
+            Memory::Write<Color>(HighlightSettingsPointer + (HighlightSize * HighlightID) + 0x4, NewColor);
     }
 
     void SetGlow(Player* Target, int GlowEnabled, int GlowThroughWall, int HighlightID) {
@@ -267,42 +282,39 @@ struct Sense {
             Memory::Write<int>(Target->BasePointer + OFF_GLOW_THROUGH_WALL, GlowThroughWall);
             Memory::Write<int>(Target->BasePointer + OFF_GLOW_FIX, 2);
         }
-        if (Target->HighlightID != HighlightID) Memory::Write<int>(Target->BasePointer + OFF_GLOW_HIGHLIGHT_ID + 1, HighlightID);
+        if (Target->HighlightID != HighlightID) Memory::Write<int>(Target->BasePointer + OFF_GLOW_HIGHLIGHT_ID + 0x0, HighlightID);
     }
 
     void Update() {
         const long HighlightSettingsPointer = Memory::Read<long>(OFF_REGION + OFF_GLOW_HIGHLIGHTS);
-        const long HighlightSize = 0x28;
+        const long HighlightSize = 0x34;
 
         // Item Glow //
         if (ItemGlow) {
-            for (int highlightId = 31; highlightId < 35; highlightId++) {
-                const GlowMode newGlowMode = { 137, 138, 35, 127 };
-                SetGlowState(HighlightSettingsPointer, HighlightSize, highlightId, newGlowMode);
-            }
-        } else {
-            for (int highlightId = 31; highlightId < 35; highlightId++) {
-                const GlowMode newGlowMode = StoredGlowMode->at(highlightId);
-                SetGlowState(HighlightSettingsPointer, HighlightSize, highlightId, newGlowMode);
-            }
+            for (int highlightId = 30; highlightId < 40; highlightId++) {
+            const GlowMode newGlowMode = { 137,0,0,127 };
+            const GlowMode oldGlowMode = Memory::Read<GlowMode>(HighlightSettingsPointer + (HighlightSize * highlightId) + 0);
+            if (newGlowMode != oldGlowMode)
+                Memory::Write<GlowMode>(HighlightSettingsPointer + (HighlightSize * highlightId) + 0, newGlowMode);
         }
+    }
 
         // Player Glow //
         // -> Visible
         const GlowMode VisibleMode = { 2, 6, 32, 127 };
-        const Color VisibleColor = { 0.6, 3, 2.04 };
+        const Color VisibleColor = { 0, 3, 16 };
         SetGlowState(HighlightSettingsPointer, HighlightSize, 0, VisibleMode);
         SetColorState(HighlightSettingsPointer, HighlightSize, 0, VisibleColor);
 
         // -> Invisible
         const GlowMode InvisibleMode = { 2, 6, 32, 100 };
-        const Color InvisibleColor = { 4.5, 0.6, 0.6 };
+        const Color InvisibleColor = { 0.5, 0.6, 0.6 };
         SetGlowState(HighlightSettingsPointer, HighlightSize, 1, InvisibleMode);
         SetColorState(HighlightSettingsPointer, HighlightSize, 1, InvisibleColor);
 
         // -> Knocked
         const GlowMode KnockedMode = { 2, 6, 32, 127 };
-        const Color KnockedColor = { 1, 1, 0.35 };
+        const Color KnockedColor = { 16, 9, 16 };
         SetGlowState(HighlightSettingsPointer, HighlightSize, 90, KnockedMode);
         SetColorState(HighlightSettingsPointer, HighlightSize, 90, KnockedColor);
 
@@ -314,7 +326,7 @@ struct Sense {
 
         // -> Locked On
         const GlowMode LockedOnMode = { 136, 6, 32, 127 };
-        const Color LockedOnColor = { 0, 0.75, 0.75 };
+        const Color LockedOnColor = { 16, 9, 0.9 };
         SetGlowState(HighlightSettingsPointer, HighlightSize, 92, LockedOnMode);
         SetColorState(HighlightSettingsPointer, HighlightSize, 92, LockedOnColor);
 
@@ -345,4 +357,5 @@ struct Sense {
             SetGlow(Target, 0, 0, 91);
         }
     }
+      
 };
